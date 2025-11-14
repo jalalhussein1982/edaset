@@ -769,13 +769,223 @@ def download_plot_file(plot_id, format_type):
         console.error(f"Error downloading plot: {str(e)}")
 
 def generate_correlation_pdf():
-    """Generate PDF report of correlation results"""
+    """Generate and download correlation results report as HTML"""
     try:
-        # This would require a PDF generation library (reportlab, etc.)
-        # For now, show a placeholder message
-        window.appFunctions.showSuccess("PDF generation functionality")
+        console.log("Generating correlation report...")
+
+        if not state.correlation_results:
+            window.appFunctions.showError("No correlation results to export")
+            return
+
+        dv = window.appState.selectedDV
+        ivs = list(window.appState.selectedIVs)
+
+        # Create HTML report
+        html_content = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Correlation Analysis Report</title>
+    <style>
+        body {{
+            font-family: Arial, sans-serif;
+            margin: 40px;
+            background-color: #f8f9fa;
+        }}
+        .header {{
+            background-color: #2563eb;
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }}
+        h1 {{
+            margin: 0;
+            font-size: 24px;
+        }}
+        .subtitle {{
+            margin-top: 5px;
+            opacity: 0.9;
+        }}
+        .section {{
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }}
+        h2 {{
+            color: #2563eb;
+            border-bottom: 2px solid #2563eb;
+            padding-bottom: 10px;
+        }}
+        table {{
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }}
+        th, td {{
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }}
+        th {{
+            background-color: #f1f5f9;
+            font-weight: bold;
+            color: #1e293b;
+        }}
+        tr:hover {{
+            background-color: #f8fafc;
+        }}
+        .metric {{
+            display: inline-block;
+            margin-right: 20px;
+            padding: 10px 15px;
+            background-color: #f1f5f9;
+            border-radius: 6px;
+        }}
+        .metric-label {{
+            font-size: 12px;
+            color: #64748b;
+            display: block;
+        }}
+        .metric-value {{
+            font-size: 18px;
+            font-weight: bold;
+            color: #1e293b;
+        }}
+        .footer {{
+            text-align: center;
+            color: #64748b;
+            margin-top: 30px;
+            padding: 20px;
+        }}
+        .sig {{
+            font-weight: bold;
+            color: #10b981;
+        }}
+        .not-sig {{
+            color: #94a3b8;
+        }}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📊 Correlation Analysis Report</h1>
+        <div class="subtitle">Dependent Variable: {dv}</div>
+        <div class="subtitle">Generated: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}</div>
+    </div>
+
+    <div class="section">
+        <h2>Analysis Summary</h2>
+        <div class="metric">
+            <span class="metric-label">Dependent Variable</span>
+            <span class="metric-value">{dv}</span>
+        </div>
+        <div class="metric">
+            <span class="metric-label">Independent Variables</span>
+            <span class="metric-value">{len(ivs)}</span>
+        </div>
+        <div class="metric">
+            <span class="metric-label">Total Observations</span>
+            <span class="metric-value">{len(state.df)}</span>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Correlation Results</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Independent Variable</th>
+                    <th>Pearson r</th>
+                    <th>p-value</th>
+                    <th>95% CI</th>
+                    <th>Spearman ρ</th>
+                    <th>p-value</th>
+                    <th>95% CI</th>
+                    <th>Kendall τ</th>
+                    <th>p-value</th>
+                    <th>95% CI</th>
+                    <th>N</th>
+                </tr>
+            </thead>
+            <tbody>
+"""
+
+        # Add correlation results
+        for r in state.correlation_results:
+            pearson_sig = "sig" if r['Pearson_p'] < 0.05 else "not-sig"
+            spearman_sig = "sig" if r['Spearman_p'] < 0.05 else "not-sig"
+            kendall_sig = "sig" if r['Kendall_p'] < 0.05 else "not-sig"
+
+            html_content += f"""
+                <tr>
+                    <td><strong>{r['IV']}</strong></td>
+                    <td>{r['Pearson_r']}</td>
+                    <td class="{pearson_sig}">{r['Pearson_p']}</td>
+                    <td>{r['Pearson_CI']}</td>
+                    <td>{r['Spearman_r']}</td>
+                    <td class="{spearman_sig}">{r['Spearman_p']}</td>
+                    <td>{r['Spearman_CI']}</td>
+                    <td>{r['Kendall_tau']}</td>
+                    <td class="{kendall_sig}">{r['Kendall_p']}</td>
+                    <td>{r['Kendall_CI']}</td>
+                    <td>{r['N']}</td>
+                </tr>
+"""
+
+        html_content += """
+            </tbody>
+        </table>
+    </div>
+
+    <div class="section">
+        <h2>Interpretation Guide</h2>
+        <ul>
+            <li><strong>Pearson Correlation (r):</strong> Measures linear relationship between variables. Range: -1 to +1.</li>
+            <li><strong>Spearman Correlation (ρ):</strong> Measures monotonic relationship using ranks. Less sensitive to outliers.</li>
+            <li><strong>Kendall's Tau (τ):</strong> Another rank-based correlation, more robust for small samples.</li>
+            <li><strong>p-value:</strong> Statistical significance. p &lt; 0.05 indicates significant correlation.</li>
+            <li><strong>95% CI:</strong> Confidence interval for the correlation coefficient.</li>
+        </ul>
+    </div>
+
+    <div class="footer">
+        <p>Generated by PyScript Statistical Data Analysis Application</p>
+        <p>All data processed client-side in your browser for complete privacy</p>
+    </div>
+</body>
+</html>
+"""
+
+        # Create blob and trigger download
+        from js import Blob, document, window as js_window
+        import js
+
+        # Create a Blob from the HTML content
+        blob = Blob.new([html_content], {"type": "text/html"})
+
+        # Create download link
+        url = js_window.URL.createObjectURL(blob)
+        a = document.createElement('a')
+        a.href = url
+        a.download = f'correlation_report_{dv}_{pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")}.html'
+        a.style.display = 'none'
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        js_window.URL.revokeObjectURL(url)
+
+        console.log("Report downloaded successfully")
+        window.appFunctions.showSuccess("Correlation report downloaded successfully!")
+
     except Exception as e:
-        console.error(f"Error generating PDF: {str(e)}")
+        console.error(f"Error generating report: {str(e)}")
+        import traceback
+        console.error(traceback.format_exc())
+        window.appFunctions.showError(f"Error generating report: {str(e)}")
 
 # ========== Expose Python Functions to JavaScript ==========
 # These functions can be called from JavaScript
