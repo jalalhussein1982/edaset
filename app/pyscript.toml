@@ -1,0 +1,30 @@
+# PyScript Configuration File
+# Specifies Python packages to load in the browser
+
+[packages]
+# Core data manipulation and numerical libraries
+packages = [
+    "pandas",
+    "numpy",
+    "scipy",
+    "matplotlib",
+    "matplotlib-pyodide",
+    "seaborn",
+    "scikit-learn",
+    "statsmodels",
+    "openpyxl",  # For Excel file support
+    "xlrd"       # For older Excel formats
+]
+
+[build]
+# Build configuration
+terminal = false
+
+[interpreter]
+# Use Pyodide interpreter
+type = "pyodide"
+
+[[runtimes]]
+src = "https://cdn.jsdelivr.net/pyodide/v0.24.1/full/pyodide.js"
+name = "pyodide-0.24.1"
+lang = "python"
