@@ -9,10 +9,10 @@ from io import StringIO, BytesIO
 import json
 from js import console, document, window, Blob, URL
 from pyodide.ffi import create_proxy
-import matplotlib
-matplotlib.use('module://matplotlib_pyodide.html5_canvas_backend')
 import matplotlib.pyplot as plt
 import seaborn as sns
+import io
+import base64
 from scipy import stats
 from scipy.stats import probplot
 from sklearn.preprocessing import StandardScaler
@@ -439,9 +439,23 @@ def apply_outlier_methods(methods_dict):
 def generate_univariate_plots(variable):
     """Generate KDE, Box, and Q-Q plots for a variable"""
     try:
+        console.log(f"Generating univariate plots for variable: {variable}")
+
+        if state.df is None:
+            console.error("DataFrame is None")
+            window.appFunctions.showError("No data loaded")
+            return
+
+        if variable not in state.df.columns:
+            console.error(f"Variable {variable} not found in dataframe")
+            window.appFunctions.showError(f"Variable {variable} not found")
+            return
+
         data = state.df[variable].dropna()
+        console.log(f"Data for {variable}: {len(data)} non-null values")
 
         # KDE Plot
+        console.log("Generating KDE plot...")
         fig, ax = plt.subplots(figsize=(8, 5))
         data.plot(kind='kde', ax=ax, color='#2563eb', linewidth=2)
         ax.set_xlabel(variable, fontsize=12)
@@ -450,8 +464,10 @@ def generate_univariate_plots(variable):
         ax.grid(True, alpha=0.3)
         display(fig, target='kde-plot')
         plt.close(fig)
+        console.log("KDE plot generated successfully")
 
         # Box Plot
+        console.log("Generating box plot...")
         fig, ax = plt.subplots(figsize=(8, 5))
         ax.boxplot(data, vert=True, patch_artist=True,
                    boxprops=dict(facecolor='#3b82f6', alpha=0.7),
@@ -463,18 +479,28 @@ def generate_univariate_plots(variable):
         ax.grid(True, alpha=0.3, axis='y')
         display(fig, target='box-plot')
         plt.close(fig)
+        console.log("Box plot generated successfully")
 
         # Q-Q Plot
+        console.log("Generating Q-Q plot...")
         distribution = document.getElementById('qq-distribution').value
         generate_qq_plot(variable, distribution)
 
+        window.appFunctions.hideProgress()
+        console.log("All univariate plots generated successfully")
+
     except Exception as e:
         console.error(f"Error generating univariate plots: {str(e)}")
+        import traceback
+        console.error(traceback.format_exc())
+        window.appFunctions.hideProgress()
         window.appFunctions.showError(f"Error generating plots: {str(e)}")
 
 def generate_qq_plot(variable, distribution='norm'):
     """Generate Q-Q plot with specified distribution"""
     try:
+        console.log(f"Generating Q-Q plot for {variable} with {distribution} distribution")
+
         data = state.df[variable].dropna()
 
         fig, ax = plt.subplots(figsize=(8, 5))
@@ -503,8 +529,12 @@ def generate_qq_plot(variable, distribution='norm'):
         display(fig, target='qq-plot')
         plt.close(fig)
 
+        console.log("Q-Q plot generated successfully")
+
     except Exception as e:
         console.error(f"Error generating Q-Q plot: {str(e)}")
+        import traceback
+        console.error(traceback.format_exc())
 
 # ========== Bivariate Analysis Functions ==========
 def generate_scatterplot(dv, iv, show_linear, show_lowess, show_poly, poly_degree):
@@ -710,19 +740,23 @@ def generate_correlation_table(results):
 def display(fig, target):
     """Display matplotlib figure in specified HTML element"""
     try:
-        # Convert figure to HTML canvas
-        from matplotlib_pyodide import HTML5Canvas
-        canvas = HTML5Canvas.from_figure(fig)
+        # Convert figure to base64 PNG image
+        buf = io.BytesIO()
+        fig.savefig(buf, format='png', dpi=100, bbox_inches='tight')
+        buf.seek(0)
+        img_base64 = base64.b64encode(buf.read()).decode('utf-8')
+        buf.close()
 
-        # Get target element and clear it
+        # Get target element and insert image
         target_elem = document.getElementById(target)
-        target_elem.innerHTML = ""
+        target_elem.innerHTML = f'<img src="data:image/png;base64,{img_base64}" style="max-width: 100%; height: auto;" />'
 
-        # Append canvas
-        target_elem.appendChild(canvas.get_element())
+        console.log(f"Plot displayed successfully in {target}")
 
     except Exception as e:
-        console.error(f"Error displaying plot: {str(e)}")
+        console.error(f"Error displaying plot in {target}: {str(e)}")
+        import traceback
+        console.error(traceback.format_exc())
 
 # ========== Download Functions ==========
 def download_plot_file(plot_id, format_type):
