@@ -17,10 +17,24 @@ const appState = {
     correlationView: 'heatmap'
 };
 
+// Make appState globally accessible for Python
+window.appState = appState;
+
 // ========== Initialization ==========
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Application initialized');
     updateNavigationState();
+
+    // Listen for PyScript ready event
+    document.addEventListener('py:ready', function() {
+        console.log('PyScript is ready!');
+        window.pythonReady = true;
+    });
+
+    document.addEventListener('py:all-done', function() {
+        console.log('All PyScript code loaded!');
+        window.pythonReady = true;
+    });
 });
 
 // ========== Progress Bar Functions ==========
@@ -73,7 +87,90 @@ function goToStep(stepNumber) {
     });
 
     appState.currentStep = stepNumber;
+
+    // Trigger step-specific actions
+    handleStepTransition(stepNumber);
+
     window.scrollTo(0, 0);
+}
+
+function handleStepTransition(stepNumber) {
+    // Handle actions when transitioning to specific steps
+    switch(stepNumber) {
+        case 3:
+            // Process uploaded file when entering variable selection step
+            if (appState.dataFile) {
+                console.log('Step 3: Checking if Python is ready...');
+                waitForPythonThenProcess();
+            }
+            break;
+        case 4:
+            // Check data quality when entering data quality step
+            waitForPythonThenCall('checkDataQuality', window.checkDataQuality);
+            break;
+        case 5:
+            // Detect outliers when entering outlier step
+            waitForPythonThenCall('detectOutliersInData', detectOutliers);
+            break;
+        case 6:
+            // Populate univariate variable dropdown
+            populateUnivariateDropdown();
+            break;
+        case 7:
+            // Initialize scatterplot
+            appState.currentScatterplotIndex = 0;
+            setTimeout(() => updateScatterplot(), 100);
+            break;
+        case 8:
+            // Calculate correlations
+            waitForPythonThenCall('calculateCorrelations', window.calculateCorrelations);
+            break;
+    }
+}
+
+function waitForPythonThenProcess() {
+    // Wait for Python to be ready before processing file
+    let attempts = 0;
+    const maxAttempts = 50; // 10 seconds max
+
+    const checkAndProcess = () => {
+        attempts++;
+        console.log(`Attempt ${attempts}: Checking for processUploadedFile...`);
+
+        if (typeof window.processUploadedFile === 'function') {
+            console.log('Python ready! Processing file...');
+            window.processUploadedFile();
+        } else if (attempts < maxAttempts) {
+            console.log('Python not ready yet, retrying...');
+            setTimeout(checkAndProcess, 200);
+        } else {
+            console.error('Python failed to load after 10 seconds');
+            alert('Python environment is still loading. Please wait a moment and try clicking Next again.');
+        }
+    };
+
+    checkAndProcess();
+}
+
+function waitForPythonThenCall(functionName, functionRef) {
+    // Generic function to wait for Python functions
+    let attempts = 0;
+    const maxAttempts = 50;
+
+    const checkAndCall = () => {
+        attempts++;
+
+        if (typeof functionRef === 'function') {
+            console.log(`${functionName} is ready, calling it...`);
+            setTimeout(() => functionRef(), 100);
+        } else if (attempts < maxAttempts) {
+            setTimeout(checkAndCall, 200);
+        } else {
+            console.warn(`${functionName} not available after waiting`);
+        }
+    };
+
+    checkAndCall();
 }
 
 function nextStep() {
@@ -232,19 +329,24 @@ function loadFileWithPython(file) {
     reader.onload = function(e) {
         const fileContent = e.target.result;
 
-        // Call Python function to load data
-        if (typeof pyscript !== 'undefined') {
-            try {
-                // This will be handled by Python code
-                window.fileContent = fileContent;
-                window.fileName = file.name;
-                updateProgress(100, 'File loaded successfully!');
+        try {
+            // Store file content in window for Python access
+            window.fileContent = fileContent;
+            window.fileName = file.name;
+
+            updateProgress(50, 'File read successfully...');
+
+            // Update progress to 100
+            setTimeout(() => {
+                updateProgress(100, 'File loaded! Ready to proceed.');
                 setTimeout(hideProgress, 1000);
-            } catch (error) {
-                console.error('Error loading file:', error);
-                alert('Error loading file. Please try again.');
-                hideProgress();
-            }
+            }, 500);
+
+            console.log('File loaded successfully:', file.name);
+        } catch (error) {
+            console.error('Error loading file:', error);
+            alert('Error loading file. Please try again.');
+            hideProgress();
         }
     };
 
@@ -252,6 +354,9 @@ function loadFileWithPython(file) {
         alert('Error reading file. Please try again.');
         hideProgress();
     };
+
+    // Progress simulation
+    setTimeout(() => updateProgress(25, 'Reading file...'), 200);
 
     if (file.name.endsWith('.csv')) {
         reader.readAsText(file);
@@ -439,6 +544,23 @@ function updateQQPlot() {
     }
 
     setTimeout(hideProgress, 500);
+}
+
+function populateUnivariateDropdown() {
+    // Populate univariate variable dropdown with all selected variables (DV + IVs)
+    const dropdown = document.getElementById('univariate-variable');
+    dropdown.innerHTML = '<option value="">-- Select Variable --</option>';
+
+    const allVariables = [appState.selectedDV, ...appState.selectedIVs];
+
+    allVariables.forEach(varName => {
+        const option = document.createElement('option');
+        option.value = varName;
+        option.textContent = varName;
+        dropdown.appendChild(option);
+    });
+
+    console.log('Univariate dropdown populated with:', allVariables);
 }
 
 // ========== Step 7: Bivariate Analysis ==========

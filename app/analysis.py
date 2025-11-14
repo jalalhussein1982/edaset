@@ -9,10 +9,10 @@ from io import StringIO, BytesIO
 import json
 from js import console, document, window, Blob, URL
 from pyodide.ffi import create_proxy
-import matplotlib
-matplotlib.use('module://matplotlib_pyodide.html5_canvas_backend')
 import matplotlib.pyplot as plt
 import seaborn as sns
+import io
+import base64
 from scipy import stats
 from scipy.stats import probplot
 from sklearn.preprocessing import StandardScaler
@@ -62,8 +62,21 @@ def load_excel_data(file_content):
 def process_uploaded_file():
     """Process the uploaded file and populate variable selections"""
     try:
+        console.log("Starting file processing...")
+        window.appFunctions.showProgress("Processing uploaded file...", 10)
+
+        # Check if file content exists
+        if not hasattr(window, 'fileContent') or not hasattr(window, 'fileName'):
+            console.error("File content not found in window")
+            window.appFunctions.hideProgress()
+            window.appFunctions.showError("File content not found. Please upload the file again.")
+            return
+
         file_content = window.fileContent
         file_name = window.fileName
+
+        console.log(f"Processing file: {file_name}")
+        window.appFunctions.updateProgress(30, "Parsing data...")
 
         if file_name.endswith('.csv'):
             state.df = load_csv_data(file_content)
@@ -71,20 +84,40 @@ def process_uploaded_file():
             state.df = load_excel_data(file_content)
 
         if state.df is not None:
+            window.appFunctions.updateProgress(60, "Filtering numeric columns...")
             state.original_df = state.df.copy()
 
             # Filter only numeric columns
             numeric_cols = state.df.select_dtypes(include=[np.number]).columns.tolist()
 
+            console.log(f"Found {len(numeric_cols)} numeric columns: {numeric_cols}")
+
             if len(numeric_cols) == 0:
+                window.appFunctions.hideProgress()
                 window.appFunctions.showError("No numeric columns found in the dataset")
                 return
 
+            window.appFunctions.updateProgress(90, "Populating variable selections...")
+
             # Populate variable selections
             window.appFunctions.populateVariableSelections(numeric_cols)
-            console.log("Data loaded successfully")
+
+            window.appFunctions.updateProgress(100, "Complete!")
+            console.log("Data loaded and variables populated successfully")
+
+            # Hide progress after a short delay
+            import js
+            js.setTimeout(window.appFunctions.hideProgress, 1000)
+
+        else:
+            window.appFunctions.hideProgress()
+            window.appFunctions.showError("Failed to load data from file")
+
     except Exception as e:
         console.error(f"Error processing file: {str(e)}")
+        import traceback
+        console.error(traceback.format_exc())
+        window.appFunctions.hideProgress()
         window.appFunctions.showError(f"Error processing file: {str(e)}")
 
 # ========== Data Quality Check Functions ==========
@@ -406,9 +439,23 @@ def apply_outlier_methods(methods_dict):
 def generate_univariate_plots(variable):
     """Generate KDE, Box, and Q-Q plots for a variable"""
     try:
+        console.log(f"Generating univariate plots for variable: {variable}")
+
+        if state.df is None:
+            console.error("DataFrame is None")
+            window.appFunctions.showError("No data loaded")
+            return
+
+        if variable not in state.df.columns:
+            console.error(f"Variable {variable} not found in dataframe")
+            window.appFunctions.showError(f"Variable {variable} not found")
+            return
+
         data = state.df[variable].dropna()
+        console.log(f"Data for {variable}: {len(data)} non-null values")
 
         # KDE Plot
+        console.log("Generating KDE plot...")
         fig, ax = plt.subplots(figsize=(8, 5))
         data.plot(kind='kde', ax=ax, color='#2563eb', linewidth=2)
         ax.set_xlabel(variable, fontsize=12)
@@ -417,8 +464,10 @@ def generate_univariate_plots(variable):
         ax.grid(True, alpha=0.3)
         display(fig, target='kde-plot')
         plt.close(fig)
+        console.log("KDE plot generated successfully")
 
         # Box Plot
+        console.log("Generating box plot...")
         fig, ax = plt.subplots(figsize=(8, 5))
         ax.boxplot(data, vert=True, patch_artist=True,
                    boxprops=dict(facecolor='#3b82f6', alpha=0.7),
@@ -430,18 +479,28 @@ def generate_univariate_plots(variable):
         ax.grid(True, alpha=0.3, axis='y')
         display(fig, target='box-plot')
         plt.close(fig)
+        console.log("Box plot generated successfully")
 
         # Q-Q Plot
+        console.log("Generating Q-Q plot...")
         distribution = document.getElementById('qq-distribution').value
         generate_qq_plot(variable, distribution)
 
+        window.appFunctions.hideProgress()
+        console.log("All univariate plots generated successfully")
+
     except Exception as e:
         console.error(f"Error generating univariate plots: {str(e)}")
+        import traceback
+        console.error(traceback.format_exc())
+        window.appFunctions.hideProgress()
         window.appFunctions.showError(f"Error generating plots: {str(e)}")
 
 def generate_qq_plot(variable, distribution='norm'):
     """Generate Q-Q plot with specified distribution"""
     try:
+        console.log(f"Generating Q-Q plot for {variable} with {distribution} distribution")
+
         data = state.df[variable].dropna()
 
         fig, ax = plt.subplots(figsize=(8, 5))
@@ -470,8 +529,12 @@ def generate_qq_plot(variable, distribution='norm'):
         display(fig, target='qq-plot')
         plt.close(fig)
 
+        console.log("Q-Q plot generated successfully")
+
     except Exception as e:
         console.error(f"Error generating Q-Q plot: {str(e)}")
+        import traceback
+        console.error(traceback.format_exc())
 
 # ========== Bivariate Analysis Functions ==========
 def generate_scatterplot(dv, iv, show_linear, show_lowess, show_poly, poly_degree):
@@ -677,19 +740,23 @@ def generate_correlation_table(results):
 def display(fig, target):
     """Display matplotlib figure in specified HTML element"""
     try:
-        # Convert figure to HTML canvas
-        from matplotlib_pyodide import HTML5Canvas
-        canvas = HTML5Canvas.from_figure(fig)
+        # Convert figure to base64 PNG image
+        buf = io.BytesIO()
+        fig.savefig(buf, format='png', dpi=100, bbox_inches='tight')
+        buf.seek(0)
+        img_base64 = base64.b64encode(buf.read()).decode('utf-8')
+        buf.close()
 
-        # Get target element and clear it
+        # Get target element and insert image
         target_elem = document.getElementById(target)
-        target_elem.innerHTML = ""
+        target_elem.innerHTML = f'<img src="data:image/png;base64,{img_base64}" style="max-width: 100%; height: auto;" />'
 
-        # Append canvas
-        target_elem.appendChild(canvas.get_element())
+        console.log(f"Plot displayed successfully in {target}")
 
     except Exception as e:
-        console.error(f"Error displaying plot: {str(e)}")
+        console.error(f"Error displaying plot in {target}: {str(e)}")
+        import traceback
+        console.error(traceback.format_exc())
 
 # ========== Download Functions ==========
 def download_plot_file(plot_id, format_type):
@@ -702,26 +769,257 @@ def download_plot_file(plot_id, format_type):
         console.error(f"Error downloading plot: {str(e)}")
 
 def generate_correlation_pdf():
-    """Generate PDF report of correlation results"""
+    """Generate and download correlation results report as HTML"""
     try:
-        # This would require a PDF generation library (reportlab, etc.)
-        # For now, show a placeholder message
-        window.appFunctions.showSuccess("PDF generation functionality")
+        console.log("Generating correlation report...")
+
+        if not state.correlation_results:
+            window.appFunctions.showError("No correlation results to export")
+            return
+
+        dv = window.appState.selectedDV
+        ivs = list(window.appState.selectedIVs)
+
+        # Create HTML report
+        html_content = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Correlation Analysis Report</title>
+    <style>
+        body {{
+            font-family: Arial, sans-serif;
+            margin: 40px;
+            background-color: #f8f9fa;
+        }}
+        .header {{
+            background-color: #2563eb;
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }}
+        h1 {{
+            margin: 0;
+            font-size: 24px;
+        }}
+        .subtitle {{
+            margin-top: 5px;
+            opacity: 0.9;
+        }}
+        .section {{
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }}
+        h2 {{
+            color: #2563eb;
+            border-bottom: 2px solid #2563eb;
+            padding-bottom: 10px;
+        }}
+        table {{
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }}
+        th, td {{
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }}
+        th {{
+            background-color: #f1f5f9;
+            font-weight: bold;
+            color: #1e293b;
+        }}
+        tr:hover {{
+            background-color: #f8fafc;
+        }}
+        .metric {{
+            display: inline-block;
+            margin-right: 20px;
+            padding: 10px 15px;
+            background-color: #f1f5f9;
+            border-radius: 6px;
+        }}
+        .metric-label {{
+            font-size: 12px;
+            color: #64748b;
+            display: block;
+        }}
+        .metric-value {{
+            font-size: 18px;
+            font-weight: bold;
+            color: #1e293b;
+        }}
+        .footer {{
+            text-align: center;
+            color: #64748b;
+            margin-top: 30px;
+            padding: 20px;
+        }}
+        .sig {{
+            font-weight: bold;
+            color: #10b981;
+        }}
+        .not-sig {{
+            color: #94a3b8;
+        }}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📊 Correlation Analysis Report</h1>
+        <div class="subtitle">Dependent Variable: {dv}</div>
+        <div class="subtitle">Generated: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}</div>
+    </div>
+
+    <div class="section">
+        <h2>Analysis Summary</h2>
+        <div class="metric">
+            <span class="metric-label">Dependent Variable</span>
+            <span class="metric-value">{dv}</span>
+        </div>
+        <div class="metric">
+            <span class="metric-label">Independent Variables</span>
+            <span class="metric-value">{len(ivs)}</span>
+        </div>
+        <div class="metric">
+            <span class="metric-label">Total Observations</span>
+            <span class="metric-value">{len(state.df)}</span>
+        </div>
+    </div>
+
+    <div class="section">
+        <h2>Correlation Results</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Independent Variable</th>
+                    <th>Pearson r</th>
+                    <th>p-value</th>
+                    <th>95% CI</th>
+                    <th>Spearman ρ</th>
+                    <th>p-value</th>
+                    <th>95% CI</th>
+                    <th>Kendall τ</th>
+                    <th>p-value</th>
+                    <th>95% CI</th>
+                    <th>N</th>
+                </tr>
+            </thead>
+            <tbody>
+"""
+
+        # Add correlation results
+        for r in state.correlation_results:
+            pearson_sig = "sig" if r['Pearson_p'] < 0.05 else "not-sig"
+            spearman_sig = "sig" if r['Spearman_p'] < 0.05 else "not-sig"
+            kendall_sig = "sig" if r['Kendall_p'] < 0.05 else "not-sig"
+
+            html_content += f"""
+                <tr>
+                    <td><strong>{r['IV']}</strong></td>
+                    <td>{r['Pearson_r']}</td>
+                    <td class="{pearson_sig}">{r['Pearson_p']}</td>
+                    <td>{r['Pearson_CI']}</td>
+                    <td>{r['Spearman_r']}</td>
+                    <td class="{spearman_sig}">{r['Spearman_p']}</td>
+                    <td>{r['Spearman_CI']}</td>
+                    <td>{r['Kendall_tau']}</td>
+                    <td class="{kendall_sig}">{r['Kendall_p']}</td>
+                    <td>{r['Kendall_CI']}</td>
+                    <td>{r['N']}</td>
+                </tr>
+"""
+
+        html_content += """
+            </tbody>
+        </table>
+    </div>
+
+    <div class="section">
+        <h2>Interpretation Guide</h2>
+        <ul>
+            <li><strong>Pearson Correlation (r):</strong> Measures linear relationship between variables. Range: -1 to +1.</li>
+            <li><strong>Spearman Correlation (ρ):</strong> Measures monotonic relationship using ranks. Less sensitive to outliers.</li>
+            <li><strong>Kendall's Tau (τ):</strong> Another rank-based correlation, more robust for small samples.</li>
+            <li><strong>p-value:</strong> Statistical significance. p &lt; 0.05 indicates significant correlation.</li>
+            <li><strong>95% CI:</strong> Confidence interval for the correlation coefficient.</li>
+        </ul>
+    </div>
+
+    <div class="footer">
+        <p>Generated by PyScript Statistical Data Analysis Application</p>
+        <p>All data processed client-side in your browser for complete privacy</p>
+    </div>
+</body>
+</html>
+"""
+
+        # Create blob and trigger download
+        from js import Blob, document, window as js_window
+        import js
+
+        # Create a Blob from the HTML content
+        blob = Blob.new([html_content], {"type": "text/html"})
+
+        # Create download link
+        url = js_window.URL.createObjectURL(blob)
+        a = document.createElement('a')
+        a.href = url
+        a.download = f'correlation_report_{dv}_{pd.Timestamp.now().strftime("%Y%m%d_%H%M%S")}.html'
+        a.style.display = 'none'
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        js_window.URL.revokeObjectURL(url)
+
+        console.log("Report downloaded successfully")
+        window.appFunctions.showSuccess("Correlation report downloaded successfully!")
+
     except Exception as e:
-        console.error(f"Error generating PDF: {str(e)}")
+        console.error(f"Error generating report: {str(e)}")
+        import traceback
+        console.error(traceback.format_exc())
+        window.appFunctions.showError(f"Error generating report: {str(e)}")
 
 # ========== Expose Python Functions to JavaScript ==========
 # These functions can be called from JavaScript
-window.processUploadedFile = process_uploaded_file
-window.checkDataQuality = check_data_quality
-window.handleMissingData = handle_missing_data
-window.detectOutliersInData = detect_outliers_in_data
-window.applyOutlierMethods = apply_outlier_methods
-window.generateUnivariatePlots = generate_univariate_plots
-window.updateQQPlotDistribution = generate_qq_plot
-window.generateScatterplot = generate_scatterplot
-window.calculateCorrelations = calculate_correlations
-window.downloadPlotFile = download_plot_file
-window.generateCorrelationPDF = generate_correlation_pdf
+try:
+    window.processUploadedFile = process_uploaded_file
+    window.checkDataQuality = check_data_quality
+    window.handleMissingData = handle_missing_data
+    window.detectOutliersInData = detect_outliers_in_data
+    window.applyOutlierMethods = apply_outlier_methods
+    window.generateUnivariatePlots = generate_univariate_plots
+    window.updateQQPlotDistribution = generate_qq_plot
+    window.generateScatterplot = generate_scatterplot
+    window.calculateCorrelations = calculate_correlations
+    window.downloadPlotFile = download_plot_file
+    window.generateCorrelationPDF = generate_correlation_pdf
 
-console.log("Analysis module loaded successfully")
+    console.log("✓ Analysis module loaded successfully")
+    console.log("✓ All Python functions exposed to JavaScript")
+    console.log("✓ Available functions:", [
+        "processUploadedFile",
+        "checkDataQuality",
+        "handleMissingData",
+        "detectOutliersInData",
+        "applyOutlierMethods",
+        "generateUnivariatePlots",
+        "updateQQPlotDistribution",
+        "generateScatterplot",
+        "calculateCorrelations"
+    ])
+
+    # Signal that Python is ready
+    window.pythonReady = True
+
+except Exception as e:
+    console.error(f"Error exposing Python functions: {str(e)}")
+    import traceback
+    console.error(traceback.format_exc())

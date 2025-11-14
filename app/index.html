@@ -372,7 +372,22 @@
     </div>
 
     <!-- PyScript Configuration -->
-    <script type="py" src="analysis.py" config="pyscript.toml"></script>
+    <py-config>
+        packages = [
+            "pandas",
+            "numpy",
+            "scipy",
+            "matplotlib",
+            "seaborn",
+            "scikit-learn",
+            "statsmodels",
+            "openpyxl",
+            "xlrd"
+        ]
+    </py-config>
+
+    <!-- PyScript Code -->
+    <script type="py" src="analysis.py"></script>
 
     <!-- JavaScript -->
     <script src="script.js"></script>
