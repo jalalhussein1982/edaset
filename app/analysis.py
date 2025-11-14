@@ -745,16 +745,37 @@ def generate_correlation_pdf():
 
 # ========== Expose Python Functions to JavaScript ==========
 # These functions can be called from JavaScript
-window.processUploadedFile = process_uploaded_file
-window.checkDataQuality = check_data_quality
-window.handleMissingData = handle_missing_data
-window.detectOutliersInData = detect_outliers_in_data
-window.applyOutlierMethods = apply_outlier_methods
-window.generateUnivariatePlots = generate_univariate_plots
-window.updateQQPlotDistribution = generate_qq_plot
-window.generateScatterplot = generate_scatterplot
-window.calculateCorrelations = calculate_correlations
-window.downloadPlotFile = download_plot_file
-window.generateCorrelationPDF = generate_correlation_pdf
+try:
+    window.processUploadedFile = process_uploaded_file
+    window.checkDataQuality = check_data_quality
+    window.handleMissingData = handle_missing_data
+    window.detectOutliersInData = detect_outliers_in_data
+    window.applyOutlierMethods = apply_outlier_methods
+    window.generateUnivariatePlots = generate_univariate_plots
+    window.updateQQPlotDistribution = generate_qq_plot
+    window.generateScatterplot = generate_scatterplot
+    window.calculateCorrelations = calculate_correlations
+    window.downloadPlotFile = download_plot_file
+    window.generateCorrelationPDF = generate_correlation_pdf
 
-console.log("Analysis module loaded successfully")
+    console.log("✓ Analysis module loaded successfully")
+    console.log("✓ All Python functions exposed to JavaScript")
+    console.log("✓ Available functions:", [
+        "processUploadedFile",
+        "checkDataQuality",
+        "handleMissingData",
+        "detectOutliersInData",
+        "applyOutlierMethods",
+        "generateUnivariatePlots",
+        "updateQQPlotDistribution",
+        "generateScatterplot",
+        "calculateCorrelations"
+    ])
+
+    # Signal that Python is ready
+    window.pythonReady = True
+
+except Exception as e:
+    console.error(f"Error exposing Python functions: {str(e)}")
+    import traceback
+    console.error(traceback.format_exc())

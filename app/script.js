@@ -24,6 +24,17 @@ window.appState = appState;
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Application initialized');
     updateNavigationState();
+
+    // Listen for PyScript ready event
+    document.addEventListener('py:ready', function() {
+        console.log('PyScript is ready!');
+        window.pythonReady = true;
+    });
+
+    document.addEventListener('py:all-done', function() {
+        console.log('All PyScript code loaded!');
+        window.pythonReady = true;
+    });
 });
 
 // ========== Progress Bar Functions ==========
@@ -88,21 +99,18 @@ function handleStepTransition(stepNumber) {
     switch(stepNumber) {
         case 3:
             // Process uploaded file when entering variable selection step
-            if (appState.dataFile && typeof window.processUploadedFile === 'function') {
-                window.processUploadedFile();
+            if (appState.dataFile) {
+                console.log('Step 3: Checking if Python is ready...');
+                waitForPythonThenProcess();
             }
             break;
         case 4:
             // Check data quality when entering data quality step
-            if (typeof window.checkDataQuality === 'function') {
-                setTimeout(() => window.checkDataQuality(), 100);
-            }
+            waitForPythonThenCall('checkDataQuality', window.checkDataQuality);
             break;
         case 5:
             // Detect outliers when entering outlier step
-            if (typeof window.detectOutliersInData === 'function') {
-                setTimeout(() => detectOutliers(), 100);
-            }
+            waitForPythonThenCall('detectOutliersInData', detectOutliers);
             break;
         case 6:
             // Populate univariate variable dropdown
@@ -115,11 +123,54 @@ function handleStepTransition(stepNumber) {
             break;
         case 8:
             // Calculate correlations
-            if (typeof window.calculateCorrelations === 'function') {
-                setTimeout(() => window.calculateCorrelations(), 100);
-            }
+            waitForPythonThenCall('calculateCorrelations', window.calculateCorrelations);
             break;
     }
+}
+
+function waitForPythonThenProcess() {
+    // Wait for Python to be ready before processing file
+    let attempts = 0;
+    const maxAttempts = 50; // 10 seconds max
+
+    const checkAndProcess = () => {
+        attempts++;
+        console.log(`Attempt ${attempts}: Checking for processUploadedFile...`);
+
+        if (typeof window.processUploadedFile === 'function') {
+            console.log('Python ready! Processing file...');
+            window.processUploadedFile();
+        } else if (attempts < maxAttempts) {
+            console.log('Python not ready yet, retrying...');
+            setTimeout(checkAndProcess, 200);
+        } else {
+            console.error('Python failed to load after 10 seconds');
+            alert('Python environment is still loading. Please wait a moment and try clicking Next again.');
+        }
+    };
+
+    checkAndProcess();
+}
+
+function waitForPythonThenCall(functionName, functionRef) {
+    // Generic function to wait for Python functions
+    let attempts = 0;
+    const maxAttempts = 50;
+
+    const checkAndCall = () => {
+        attempts++;
+
+        if (typeof functionRef === 'function') {
+            console.log(`${functionName} is ready, calling it...`);
+            setTimeout(() => functionRef(), 100);
+        } else if (attempts < maxAttempts) {
+            setTimeout(checkAndCall, 200);
+        } else {
+            console.warn(`${functionName} not available after waiting`);
+        }
+    };
+
+    checkAndCall();
 }
 
 function nextStep() {
