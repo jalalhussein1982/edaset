@@ -17,6 +17,9 @@ const appState = {
     correlationView: 'heatmap'
 };
 
+// Make appState globally accessible for Python
+window.appState = appState;
+
 // ========== Initialization ==========
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Application initialized');
@@ -73,7 +76,50 @@ function goToStep(stepNumber) {
     });
 
     appState.currentStep = stepNumber;
+
+    // Trigger step-specific actions
+    handleStepTransition(stepNumber);
+
     window.scrollTo(0, 0);
+}
+
+function handleStepTransition(stepNumber) {
+    // Handle actions when transitioning to specific steps
+    switch(stepNumber) {
+        case 3:
+            // Process uploaded file when entering variable selection step
+            if (appState.dataFile && typeof window.processUploadedFile === 'function') {
+                window.processUploadedFile();
+            }
+            break;
+        case 4:
+            // Check data quality when entering data quality step
+            if (typeof window.checkDataQuality === 'function') {
+                setTimeout(() => window.checkDataQuality(), 100);
+            }
+            break;
+        case 5:
+            // Detect outliers when entering outlier step
+            if (typeof window.detectOutliersInData === 'function') {
+                setTimeout(() => detectOutliers(), 100);
+            }
+            break;
+        case 6:
+            // Populate univariate variable dropdown
+            populateUnivariateDropdown();
+            break;
+        case 7:
+            // Initialize scatterplot
+            appState.currentScatterplotIndex = 0;
+            setTimeout(() => updateScatterplot(), 100);
+            break;
+        case 8:
+            // Calculate correlations
+            if (typeof window.calculateCorrelations === 'function') {
+                setTimeout(() => window.calculateCorrelations(), 100);
+            }
+            break;
+    }
 }
 
 function nextStep() {
@@ -232,19 +278,24 @@ function loadFileWithPython(file) {
     reader.onload = function(e) {
         const fileContent = e.target.result;
 
-        // Call Python function to load data
-        if (typeof pyscript !== 'undefined') {
-            try {
-                // This will be handled by Python code
-                window.fileContent = fileContent;
-                window.fileName = file.name;
-                updateProgress(100, 'File loaded successfully!');
+        try {
+            // Store file content in window for Python access
+            window.fileContent = fileContent;
+            window.fileName = file.name;
+
+            updateProgress(50, 'File read successfully...');
+
+            // Update progress to 100
+            setTimeout(() => {
+                updateProgress(100, 'File loaded! Ready to proceed.');
                 setTimeout(hideProgress, 1000);
-            } catch (error) {
-                console.error('Error loading file:', error);
-                alert('Error loading file. Please try again.');
-                hideProgress();
-            }
+            }, 500);
+
+            console.log('File loaded successfully:', file.name);
+        } catch (error) {
+            console.error('Error loading file:', error);
+            alert('Error loading file. Please try again.');
+            hideProgress();
         }
     };
 
@@ -252,6 +303,9 @@ function loadFileWithPython(file) {
         alert('Error reading file. Please try again.');
         hideProgress();
     };
+
+    // Progress simulation
+    setTimeout(() => updateProgress(25, 'Reading file...'), 200);
 
     if (file.name.endsWith('.csv')) {
         reader.readAsText(file);
@@ -439,6 +493,23 @@ function updateQQPlot() {
     }
 
     setTimeout(hideProgress, 500);
+}
+
+function populateUnivariateDropdown() {
+    // Populate univariate variable dropdown with all selected variables (DV + IVs)
+    const dropdown = document.getElementById('univariate-variable');
+    dropdown.innerHTML = '<option value="">-- Select Variable --</option>';
+
+    const allVariables = [appState.selectedDV, ...appState.selectedIVs];
+
+    allVariables.forEach(varName => {
+        const option = document.createElement('option');
+        option.value = varName;
+        option.textContent = varName;
+        dropdown.appendChild(option);
+    });
+
+    console.log('Univariate dropdown populated with:', allVariables);
 }
 
 // ========== Step 7: Bivariate Analysis ==========

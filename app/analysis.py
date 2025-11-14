@@ -62,8 +62,21 @@ def load_excel_data(file_content):
 def process_uploaded_file():
     """Process the uploaded file and populate variable selections"""
     try:
+        console.log("Starting file processing...")
+        window.appFunctions.showProgress("Processing uploaded file...", 10)
+
+        # Check if file content exists
+        if not hasattr(window, 'fileContent') or not hasattr(window, 'fileName'):
+            console.error("File content not found in window")
+            window.appFunctions.hideProgress()
+            window.appFunctions.showError("File content not found. Please upload the file again.")
+            return
+
         file_content = window.fileContent
         file_name = window.fileName
+
+        console.log(f"Processing file: {file_name}")
+        window.appFunctions.updateProgress(30, "Parsing data...")
 
         if file_name.endswith('.csv'):
             state.df = load_csv_data(file_content)
@@ -71,20 +84,40 @@ def process_uploaded_file():
             state.df = load_excel_data(file_content)
 
         if state.df is not None:
+            window.appFunctions.updateProgress(60, "Filtering numeric columns...")
             state.original_df = state.df.copy()
 
             # Filter only numeric columns
             numeric_cols = state.df.select_dtypes(include=[np.number]).columns.tolist()
 
+            console.log(f"Found {len(numeric_cols)} numeric columns: {numeric_cols}")
+
             if len(numeric_cols) == 0:
+                window.appFunctions.hideProgress()
                 window.appFunctions.showError("No numeric columns found in the dataset")
                 return
 
+            window.appFunctions.updateProgress(90, "Populating variable selections...")
+
             # Populate variable selections
             window.appFunctions.populateVariableSelections(numeric_cols)
-            console.log("Data loaded successfully")
+
+            window.appFunctions.updateProgress(100, "Complete!")
+            console.log("Data loaded and variables populated successfully")
+
+            # Hide progress after a short delay
+            import js
+            js.setTimeout(window.appFunctions.hideProgress, 1000)
+
+        else:
+            window.appFunctions.hideProgress()
+            window.appFunctions.showError("Failed to load data from file")
+
     except Exception as e:
         console.error(f"Error processing file: {str(e)}")
+        import traceback
+        console.error(traceback.format_exc())
+        window.appFunctions.hideProgress()
         window.appFunctions.showError(f"Error processing file: {str(e)}")
 
 # ========== Data Quality Check Functions ==========
