@@ -537,31 +537,89 @@ def generate_qq_plot(variable, distribution='norm'):
         console.error(traceback.format_exc())
 
 # ========== Bivariate Analysis Functions ==========
+def show_scatterplot_status(message):
+    """Display status message in the scatterplot section"""
+    status_elem = document.getElementById('scatterplot-status')
+    if status_elem:
+        status_elem.innerHTML = message
+        status_elem.style.display = 'block'
+
+def hide_scatterplot_status():
+    """Hide status message in the scatterplot section"""
+    status_elem = document.getElementById('scatterplot-status')
+    if status_elem:
+        status_elem.style.display = 'none'
+
 def generate_scatterplot(dv, iv, show_linear, show_lowess, show_poly, poly_degree):
     """Generate scatterplot with optional overlays"""
     try:
         df_plot = state.df[[dv, iv]].dropna()
         x = df_plot[iv].values
         y = df_plot[dv].values
+        n_points = len(x)
+
+        console.log(f"Bivariate Analysis: Processing {n_points} data points")
+
+        # Show status for large datasets
+        if n_points > 10000:
+            show_scatterplot_status(f"Processing {n_points:,} data points. Large dataset detected - applying optimizations for better performance...")
 
         fig, ax = plt.subplots(figsize=(10, 6))
 
-        # Raw scatterplot
-        ax.scatter(x, y, alpha=0.6, s=50, color='#3b82f6', edgecolors='white', linewidth=0.5)
+        # Optimize scatterplot for large datasets
+        if n_points > 20000:
+            # Downsample for visualization only (not for regression calculations)
+            max_scatter_points = 10000
+            sample_indices = np.random.choice(n_points, max_scatter_points, replace=False)
+            x_scatter = x[sample_indices]
+            y_scatter = y[sample_indices]
+            console.log(f"Scatterplot: Downsampled to {max_scatter_points} points for visualization")
+            ax.scatter(x_scatter, y_scatter, alpha=0.5, s=30, color='#3b82f6', edgecolors='white', linewidth=0.3)
+        else:
+            # Raw scatterplot with all points
+            ax.scatter(x, y, alpha=0.6, s=50, color='#3b82f6', edgecolors='white', linewidth=0.5)
 
-        # Linear regression line
+        # Linear regression line (always uses full dataset)
         if show_linear:
             z = np.polyfit(x, y, 1)
             p = np.poly1d(z)
             ax.plot(x, p(x), color='#dc2626', linewidth=2, label='Linear Regression', linestyle='--')
 
-        # LOWESS smoothing
+        # LOWESS smoothing with intelligent downsampling for large datasets
         if show_lowess:
             from statsmodels.nonparametric.smoothers_lowess import lowess
-            lowess_result = lowess(y, x, frac=0.3)
+
+            # Performance optimization for large datasets
+            if n_points > 10000:
+                # Update status message
+                show_scatterplot_status(f"Computing LOWESS smoothing for {n_points:,} points (using optimized sampling of 5,000 points)...")
+
+                # Use stratified sampling to maintain data distribution
+                max_lowess_points = 5000
+                # Sort by x to ensure even coverage across the range
+                sort_idx = np.argsort(x)
+                x_sorted = x[sort_idx]
+                y_sorted = y[sort_idx]
+                # Use regular interval sampling for better representation
+                sample_indices = np.linspace(0, n_points - 1, max_lowess_points, dtype=int)
+                x_sample = x_sorted[sample_indices]
+                y_sample = y_sorted[sample_indices]
+
+                # Dynamically adjust fraction based on dataset size
+                # Smaller fraction for larger datasets to speed up computation
+                lowess_frac = max(0.05, min(0.3, 1000 / len(x_sample)))
+
+                console.log(f"LOWESS: Using {len(x_sample)} sampled points (from {n_points}) with frac={lowess_frac:.3f}")
+                lowess_result = lowess(y_sample, x_sample, frac=lowess_frac)
+            else:
+                # For smaller datasets, use all points with standard fraction
+                lowess_frac = 0.3
+                console.log(f"LOWESS: Using all {n_points} points with frac={lowess_frac}")
+                lowess_result = lowess(y, x, frac=lowess_frac)
+
             ax.plot(lowess_result[:, 0], lowess_result[:, 1], color='#10b981', linewidth=2, label='LOWESS', linestyle='-.')
 
-        # Polynomial regression
+        # Polynomial regression (uses full dataset)
         if show_poly:
             poly_features = PolynomialFeatures(degree=poly_degree)
             x_poly = poly_features.fit_transform(x.reshape(-1, 1))
@@ -586,9 +644,13 @@ def generate_scatterplot(dv, iv, show_linear, show_lowess, show_poly, poly_degre
         display(fig, target='scatterplot-container')
         plt.close(fig)
 
+        # Hide status message after successful completion
+        hide_scatterplot_status()
+
     except Exception as e:
         console.error(f"Error generating scatterplot: {str(e)}")
         window.appFunctions.showError(f"Error generating scatterplot: {str(e)}")
+        hide_scatterplot_status()
 
 # ========== Correlation Analysis Functions ==========
 def calculate_correlations():
