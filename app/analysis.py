@@ -566,17 +566,33 @@ def generate_scatterplot(dv, iv, show_linear, show_lowess, show_poly, poly_degre
 
         fig, ax = plt.subplots(figsize=(10, 6))
 
-        # Optimize scatterplot for large datasets
-        if n_points > 20000:
-            # Downsample for visualization only (not for regression calculations)
-            max_scatter_points = 10000
+        # Optimize scatterplot rendering for large datasets
+        if n_points > 50000:
+            # Very large datasets: Aggressive downsampling for visualization
+            max_scatter_points = 5000
             sample_indices = np.random.choice(n_points, max_scatter_points, replace=False)
             x_scatter = x[sample_indices]
             y_scatter = y[sample_indices]
-            console.log(f"Scatterplot: Downsampled to {max_scatter_points} points for visualization")
+            console.log(f"Scatterplot: Heavily downsampled to {max_scatter_points} points (from {n_points})")
+            ax.scatter(x_scatter, y_scatter, alpha=0.4, s=20, color='#3b82f6', edgecolors='none')
+        elif n_points > 20000:
+            # Large datasets: Moderate downsampling
+            max_scatter_points = 8000
+            sample_indices = np.random.choice(n_points, max_scatter_points, replace=False)
+            x_scatter = x[sample_indices]
+            y_scatter = y[sample_indices]
+            console.log(f"Scatterplot: Downsampled to {max_scatter_points} points (from {n_points})")
+            ax.scatter(x_scatter, y_scatter, alpha=0.5, s=25, color='#3b82f6', edgecolors='white', linewidth=0.2)
+        elif n_points > 10000:
+            # Medium-large datasets: Light downsampling
+            max_scatter_points = min(10000, n_points)
+            sample_indices = np.random.choice(n_points, max_scatter_points, replace=False)
+            x_scatter = x[sample_indices]
+            y_scatter = y[sample_indices]
+            console.log(f"Scatterplot: Lightly downsampled to {max_scatter_points} points (from {n_points})")
             ax.scatter(x_scatter, y_scatter, alpha=0.5, s=30, color='#3b82f6', edgecolors='white', linewidth=0.3)
         else:
-            # Raw scatterplot with all points
+            # Small datasets: Use all points
             ax.scatter(x, y, alpha=0.6, s=50, color='#3b82f6', edgecolors='white', linewidth=0.5)
 
         # Linear regression line (always uses full dataset)
@@ -589,13 +605,39 @@ def generate_scatterplot(dv, iv, show_linear, show_lowess, show_poly, poly_degre
         if show_lowess:
             from statsmodels.nonparametric.smoothers_lowess import lowess
 
-            # Performance optimization for large datasets
-            if n_points > 10000:
-                # Update status message
-                show_scatterplot_status(f"Computing LOWESS smoothing for {n_points:,} points (using optimized sampling of 5,000 points)...")
+            # Performance optimization with aggressive downsampling for browser constraints
+            # PyScript/Pyodide has strict memory limits compared to native Python
+            if n_points > 50000:
+                # Very large datasets: Use minimal sampling to prevent crashes
+                max_lowess_points = 1000
+                lowess_frac = 0.05
+                console.log(f"LOWESS: Very large dataset ({n_points} points) - using aggressive optimization")
+                show_scatterplot_status(f"⚠️ Large dataset ({n_points:,} points): Using aggressive LOWESS optimization (1,000 sampled points, frac=0.05) to prevent browser crash...")
+            elif n_points > 20000:
+                # Large datasets: Moderate sampling
+                max_lowess_points = 1500
+                lowess_frac = 0.08
+                console.log(f"LOWESS: Large dataset ({n_points} points) - using moderate optimization")
+                show_scatterplot_status(f"Computing LOWESS for {n_points:,} points (using 1,500 sampled points, frac=0.08)...")
+            elif n_points > 10000:
+                # Medium-large datasets: Conservative sampling
+                max_lowess_points = 2500
+                lowess_frac = 0.10
+                console.log(f"LOWESS: Medium-large dataset ({n_points} points) - using light optimization")
+                show_scatterplot_status(f"Computing LOWESS for {n_points:,} points (using 2,500 sampled points, frac=0.10)...")
+            elif n_points > 5000:
+                # Medium datasets: Minimal sampling
+                max_lowess_points = 3500
+                lowess_frac = 0.15
+                console.log(f"LOWESS: Medium dataset ({n_points} points) - using minimal optimization")
+            else:
+                # Small datasets: Use all points with standard fraction
+                max_lowess_points = n_points
+                lowess_frac = 0.3
+                console.log(f"LOWESS: Using all {n_points} points with frac={lowess_frac}")
 
-                # Use stratified sampling to maintain data distribution
-                max_lowess_points = 5000
+            # Apply sampling if needed
+            if n_points > max_lowess_points:
                 # Sort by x to ensure even coverage across the range
                 sort_idx = np.argsort(x)
                 x_sorted = x[sort_idx]
@@ -605,16 +647,10 @@ def generate_scatterplot(dv, iv, show_linear, show_lowess, show_poly, poly_degre
                 x_sample = x_sorted[sample_indices]
                 y_sample = y_sorted[sample_indices]
 
-                # Dynamically adjust fraction based on dataset size
-                # Smaller fraction for larger datasets to speed up computation
-                lowess_frac = max(0.05, min(0.3, 1000 / len(x_sample)))
-
-                console.log(f"LOWESS: Using {len(x_sample)} sampled points (from {n_points}) with frac={lowess_frac:.3f}")
+                console.log(f"LOWESS: Processing {len(x_sample)} sampled points (from {n_points} total) with frac={lowess_frac:.3f}")
                 lowess_result = lowess(y_sample, x_sample, frac=lowess_frac)
             else:
-                # For smaller datasets, use all points with standard fraction
-                lowess_frac = 0.3
-                console.log(f"LOWESS: Using all {n_points} points with frac={lowess_frac}")
+                # Use full dataset
                 lowess_result = lowess(y, x, frac=lowess_frac)
 
             ax.plot(lowess_result[:, 0], lowess_result[:, 1], color='#10b981', linewidth=2, label='LOWESS', linestyle='-.')
