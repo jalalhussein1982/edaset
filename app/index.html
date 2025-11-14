@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Statistical Data Analysis - PyScript</title>
+    <link rel="stylesheet" href="styles.css">
+
+    <!-- PyScript CSS and JS -->
+    <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
+    <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
+</head>
+<body>
+    <!-- Header -->
+    <header>
+        <h1>📊 Statistical Data Analysis</h1>
+        <p>Client-Side Python Data Analysis with PyScript</p>
+    </header>
+
+    <!-- Progress Bar -->
+    <div id="global-progress" class="hidden">
+        <div class="progress-bar">
+            <div id="progress-fill" class="progress-fill"></div>
+        </div>
+        <p id="progress-text">Loading...</p>
+    </div>
+
+    <!-- Sidebar Navigation -->
+    <aside id="sidebar">
+        <h3>Analysis Steps</h3>
+        <ul id="nav-steps">
+            <li data-step="1" class="active">1. Initialization</li>
+            <li data-step="2">2. Data Upload</li>
+            <li data-step="3">3. Variable Selection</li>
+            <li data-step="4">4. Data Quality Check</li>
+            <li data-step="5">5. Outlier Detection</li>
+            <li data-step="6">6. Univariate Analysis</li>
+            <li data-step="7">7. Bivariate Analysis</li>
+            <li data-step="8">8. Correlation Analysis</li>
+        </ul>
+    </aside>
+
+    <!-- Main Content -->
+    <main id="main-content">
+        <!-- Step 1: Initialization -->
+        <section id="step-1" class="step-section active">
+            <h2>Step 1: Initialization</h2>
+            <div class="card">
+                <p>Loading Python libraries into browser memory...</p>
+                <div id="init-status">
+                    <p>Please wait while we load the required statistical libraries:</p>
+                    <ul>
+                        <li id="lib-pandas">pandas - <span class="status-pending">Pending</span></li>
+                        <li id="lib-numpy">numpy - <span class="status-pending">Pending</span></li>
+                        <li id="lib-scipy">scipy - <span class="status-pending">Pending</span></li>
+                        <li id="lib-matplotlib">matplotlib - <span class="status-pending">Pending</span></li>
+                        <li id="lib-scikit">scikit-learn - <span class="status-pending">Pending</span></li>
+                    </ul>
+                </div>
+                <button id="start-btn" class="btn-primary" onclick="startApplication()">Start Analysis</button>
+            </div>
+        </section>
+
+        <!-- Step 2: Data Upload -->
+        <section id="step-2" class="step-section">
+            <h2>Step 2: Data Upload</h2>
+            <div class="card">
+                <p>Upload your dataset (CSV or XLS format, max 50 MB)</p>
+                <div class="upload-area" id="upload-area">
+                    <input type="file" id="file-input" accept=".csv,.xls,.xlsx" onchange="handleFileUpload(event)">
+                    <label for="file-input" class="upload-label">
+                        <span class="upload-icon">📁</span>
+                        <span>Click to upload or drag and drop</span>
+                        <span class="file-info">CSV or XLS files (max 50 MB)</span>
+                    </label>
+                </div>
+                <div id="file-info" class="hidden">
+                    <p><strong>File Name:</strong> <span id="file-name"></span></p>
+                    <p><strong>File Size:</strong> <span id="file-size"></span></p>
+                </div>
+            </div>
+            <div class="navigation-buttons">
+                <button class="btn-secondary" onclick="previousStep()">← Back</button>
+                <button class="btn-primary" onclick="nextStep()" id="upload-next-btn" disabled>Next →</button>
+            </div>
+        </section>
+
+        <!-- Step 3: Variable Selection -->
+        <section id="step-3" class="step-section">
+            <h2>Step 3: Variable Selection</h2>
+            <div class="card">
+                <p>Select one dependent variable and one or more independent variables</p>
+
+                <div class="variable-selection">
+                    <div class="dv-selection">
+                        <h3>Dependent Variable (DV)</h3>
+                        <select id="dv-select" class="form-select">
+                            <option value="">-- Select Dependent Variable --</option>
+                        </select>
+                    </div>
+
+                    <div class="iv-selection">
+                        <h3>Independent Variables (IVs)</h3>
+                        <div id="iv-checkboxes" class="checkbox-grid">
+                            <!-- Will be populated dynamically -->
+                        </div>
+                    </div>
+                </div>
+
+                <div id="selection-summary" class="hidden">
+                    <h4>Selection Summary:</h4>
+                    <p><strong>DV:</strong> <span id="selected-dv">None</span></p>
+                    <p><strong>IVs:</strong> <span id="selected-ivs">None</span></p>
+                </div>
+            </div>
+            <div class="navigation-buttons">
+                <button class="btn-secondary" onclick="previousStep()">← Back</button>
+                <button class="btn-primary" onclick="nextStep()" id="variable-next-btn" disabled>Next →</button>
+            </div>
+        </section>
+
+        <!-- Step 4: Data Quality Check -->
+        <section id="step-4" class="step-section">
+            <h2>Step 4: Data Quality Check & Missing Data</h2>
+            <div class="card">
+                <h3>Dataset Summary</h3>
+                <div id="data-summary">
+                    <!-- Will be populated by Python -->
+                </div>
+
+                <h3>Descriptive Statistics</h3>
+                <div id="descriptive-stats" class="table-container">
+                    <!-- Will be populated by Python -->
+                </div>
+
+                <h3>Missing/Invalid Data</h3>
+                <div id="missing-data-info">
+                    <!-- Will be populated by Python -->
+                </div>
+
+                <div id="missing-data-options" class="hidden">
+                    <h4>Choose Missing Data Handling Method:</h4>
+                    <div class="radio-group">
+                        <label>
+                            <input type="radio" name="missing-method" value="delete" checked>
+                            Delete rows with any missing values
+                        </label>
+                        <label>
+                            <input type="radio" name="missing-method" value="impute">
+                            Impute missing values
+                        </label>
+                        <label>
+                            <input type="radio" name="missing-method" value="manual">
+                            Manual fix (requires restart after editing)
+                        </label>
+                    </div>
+
+                    <div id="impute-options" class="hidden">
+                        <h4>Imputation Settings:</h4>
+                        <div id="impute-variables">
+                            <!-- Will be populated dynamically -->
+                        </div>
+                    </div>
+
+                    <button class="btn-primary" onclick="applyMissingDataMethod()">Apply</button>
+                </div>
+            </div>
+            <div class="navigation-buttons">
+                <button class="btn-secondary" onclick="previousStep()">← Back</button>
+                <button class="btn-primary" onclick="nextStep()" id="quality-next-btn">Next →</button>
+            </div>
+        </section>
+
+        <!-- Step 5: Outlier Detection -->
+        <section id="step-5" class="step-section">
+            <h2>Step 5: Outlier Detection</h2>
+            <div class="card">
+                <h3>Detection Method</h3>
+                <div class="radio-group">
+                    <label>
+                        <input type="radio" name="outlier-method" value="iqr" checked onchange="detectOutliers()">
+                        IQR Method (1.5× Interquartile Range)
+                    </label>
+                    <label>
+                        <input type="radio" name="outlier-method" value="zscore" onchange="detectOutliers()">
+                        Z-Score (|z| > 3)
+                    </label>
+                    <label>
+                        <input type="radio" name="outlier-method" value="modified-z" onchange="detectOutliers()">
+                        Modified Z-Score (using MAD)
+                    </label>
+                </div>
+
+                <h3>Outlier Summary</h3>
+                <div id="outlier-summary">
+                    <!-- Will be populated by Python -->
+                </div>
+
+                <h3>Outlier Handling</h3>
+                <div id="outlier-variables">
+                    <!-- Will be populated dynamically per variable -->
+                </div>
+
+                <button class="btn-primary" onclick="applyOutlierHandling()">Apply Outlier Handling</button>
+            </div>
+            <div class="navigation-buttons">
+                <button class="btn-secondary" onclick="previousStep()">← Back</button>
+                <button class="btn-primary" onclick="nextStep()" id="outlier-next-btn">Next →</button>
+            </div>
+        </section>
+
+        <!-- Step 6: Univariate Analysis -->
+        <section id="step-6" class="step-section">
+            <h2>Step 6: Univariate Analysis</h2>
+            <div class="card">
+                <h3>Select Variable to Analyze</h3>
+                <select id="univariate-variable" class="form-select" onchange="showUnivariatePlots()">
+                    <option value="">-- Select Variable --</option>
+                </select>
+
+                <div id="univariate-plots">
+                    <div class="plot-grid">
+                        <div class="plot-card">
+                            <h4>Kernel Density Estimate (KDE)</h4>
+                            <div id="kde-plot" class="plot-container"></div>
+                            <div class="plot-actions">
+                                <button class="btn-small" onclick="maximizePlot('kde-plot')">🔍 Maximize</button>
+                                <button class="btn-small" onclick="downloadPlot('kde-plot', 'png')">📥 PNG</button>
+                                <button class="btn-small" onclick="downloadPlot('kde-plot', 'svg')">📥 SVG</button>
+                            </div>
+                        </div>
+
+                        <div class="plot-card">
+                            <h4>Box Plot</h4>
+                            <div id="box-plot" class="plot-container"></div>
+                            <div class="plot-actions">
+                                <button class="btn-small" onclick="maximizePlot('box-plot')">🔍 Maximize</button>
+                                <button class="btn-small" onclick="downloadPlot('box-plot', 'png')">📥 PNG</button>
+                                <button class="btn-small" onclick="downloadPlot('box-plot', 'svg')">📥 SVG</button>
+                            </div>
+                        </div>
+
+                        <div class="plot-card">
+                            <h4>Q-Q Plot</h4>
+                            <div class="qq-controls">
+                                <label>Reference Distribution:</label>
+                                <select id="qq-distribution" onchange="updateQQPlot()">
+                                    <option value="norm" selected>Normal</option>
+                                    <option value="t">t-distribution</option>
+                                    <option value="uniform">Uniform</option>
+                                    <option value="gamma">Gamma</option>
+                                    <option value="exponential">Exponential</option>
+                                </select>
+                            </div>
+                            <div id="qq-plot" class="plot-container"></div>
+                            <div class="plot-actions">
+                                <button class="btn-small" onclick="maximizePlot('qq-plot')">🔍 Maximize</button>
+                                <button class="btn-small" onclick="downloadPlot('qq-plot', 'png')">📥 PNG</button>
+                                <button class="btn-small" onclick="downloadPlot('qq-plot', 'svg')">📥 SVG</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="navigation-buttons">
+                <button class="btn-secondary" onclick="previousStep()">← Back</button>
+                <button class="btn-primary" onclick="nextStep()">Next →</button>
+            </div>
+        </section>
+
+        <!-- Step 7: Bivariate Analysis -->
+        <section id="step-7" class="step-section">
+            <h2>Step 7: Bivariate Analysis - Scatterplots</h2>
+            <div class="card">
+                <div class="scatterplot-navigation">
+                    <button class="btn-secondary" onclick="previousScatterplot()" id="prev-scatter-btn">← Previous IV</button>
+                    <h3 id="scatter-title">DV vs IV</h3>
+                    <button class="btn-secondary" onclick="nextScatterplot()" id="next-scatter-btn">Next IV →</button>
+                </div>
+
+                <div class="plot-overlays">
+                    <h4>Plot Overlays:</h4>
+                    <label>
+                        <input type="checkbox" id="overlay-linear" checked onchange="updateScatterplot()">
+                        Linear Regression Line
+                    </label>
+                    <label>
+                        <input type="checkbox" id="overlay-lowess" onchange="updateScatterplot()">
+                        LOWESS Smoothing
+                    </label>
+                    <label>
+                        <input type="checkbox" id="overlay-poly" onchange="updateScatterplot()">
+                        Polynomial Regression
+                        <select id="poly-degree" onchange="updateScatterplot()">
+                            <option value="2">Degree 2</option>
+                            <option value="3">Degree 3</option>
+                            <option value="4">Degree 4</option>
+                        </select>
+                    </label>
+                </div>
+
+                <div id="scatterplot-container" class="plot-container-large">
+                    <!-- Scatterplot will be rendered here -->
+                </div>
+
+                <div class="plot-actions">
+                    <button class="btn-small" onclick="maximizePlot('scatterplot-container')">🔍 Maximize</button>
+                    <button class="btn-small" onclick="downloadPlot('scatterplot-container', 'png')">📥 PNG</button>
+                    <button class="btn-small" onclick="downloadPlot('scatterplot-container', 'svg')">📥 SVG</button>
+                </div>
+            </div>
+            <div class="navigation-buttons">
+                <button class="btn-secondary" onclick="previousStep()">← Back</button>
+                <button class="btn-primary" onclick="nextStep()">Next →</button>
+            </div>
+        </section>
+
+        <!-- Step 8: Correlation Analysis -->
+        <section id="step-8" class="step-section">
+            <h2>Step 8: Correlation Analysis</h2>
+            <div class="card">
+                <div class="view-toggle">
+                    <button class="btn-toggle active" onclick="toggleCorrelationView('heatmap')" id="heatmap-btn">Heatmap View</button>
+                    <button class="btn-toggle" onclick="toggleCorrelationView('table')" id="table-btn">Table View</button>
+                </div>
+
+                <div id="correlation-heatmap" class="correlation-view">
+                    <h3>Pearson Correlation</h3>
+                    <div id="pearson-heatmap" class="plot-container-large"></div>
+
+                    <h3>Spearman Correlation</h3>
+                    <div id="spearman-heatmap" class="plot-container-large"></div>
+
+                    <h3>Kendall's Tau</h3>
+                    <div id="kendall-heatmap" class="plot-container-large"></div>
+                </div>
+
+                <div id="correlation-table" class="correlation-view hidden">
+                    <div class="table-container" id="correlation-table-container">
+                        <!-- Table will be populated by Python -->
+                    </div>
+                </div>
+
+                <div class="plot-actions">
+                    <button class="btn-primary" onclick="downloadCorrelationResults()">📥 Download PDF Report</button>
+                </div>
+            </div>
+            <div class="navigation-buttons">
+                <button class="btn-secondary" onclick="previousStep()">← Back</button>
+                <button class="btn-primary" onclick="window.location.reload()">🔄 Start New Analysis</button>
+            </div>
+        </section>
+    </main>
+
+    <!-- Modal for Maximized Plots -->
+    <div id="plot-modal" class="modal hidden">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeModal()">&times;</span>
+            <div id="modal-plot-container"></div>
+        </div>
+    </div>
+
+    <!-- Modal for Missing Data Details -->
+    <div id="missing-data-modal" class="modal hidden">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeMissingDataModal()">&times;</span>
+            <h3>Missing/Invalid Data Details</h3>
+            <div id="missing-data-table" class="table-container">
+                <!-- Table will be populated -->
+            </div>
+        </div>
+    </div>
+
+    <!-- PyScript Configuration -->
+    <script type="py" src="analysis.py" config="pyscript.toml"></script>
+
+    <!-- JavaScript -->
+    <script src="script.js"></script>
+</body>
+</html>
